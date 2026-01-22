@@ -3,9 +3,11 @@
 from flask import Flask, render_template_string, jsonify, request
 import json
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import threading
 import time
+import signal
+import sys
 
 app = Flask(__name__)
 
@@ -16,10 +18,14 @@ dashboard_state = {
         'total_decisions': 0,
         'blocked_actions': 0,
         'safety_downgrades': 0,
-        'uptime': datetime.now()
+        'uptime': datetime.now(timezone.utc)
     },
     'system_health': 'healthy'
 }
+
+# Thread management
+event_thread = None
+shutdown_event = threading.Event()
 
 ADVANCED_HTML = """
 <!DOCTYPE html>
@@ -362,7 +368,7 @@ def process_rl_decision(event):
 
 def event_generator():
     """Background thread to generate events"""
-    while True:
+    while not shutdown_event.is_set():
         if len(dashboard_state['events']) < 100:  # Keep last 100 events
             event = generate_sample_event()
             decision = process_rl_decision(event)
@@ -375,7 +381,9 @@ def event_generator():
             event['decision'] = decision
             dashboard_state['events'].append(event)
         
-        time.sleep(random.uniform(2, 8))  # Random interval
+        # Check shutdown event before sleeping
+        if shutdown_event.wait(timeout=random.uniform(2, 8)):
+            break  # Shutdown requested
 
 @app.route('/')
 def dashboard():
@@ -393,13 +401,41 @@ def clear_events():
     dashboard_state['metrics']['safety_downgrades'] = 0
     return jsonify({'status': 'cleared'})
 
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    print("\n🛑 Shutdown signal received. Stopping dashboard...")
+    shutdown_event.set()
+    
+    # Wait for thread to finish
+    if event_thread and event_thread.is_alive():
+        print("⏳ Waiting for event generator thread to finish...")
+        event_thread.join(timeout=5.0)
+        if event_thread.is_alive():
+            print("⚠️  Thread did not finish gracefully")
+    
+    print("✅ Dashboard shutdown complete")
+    sys.exit(0)
+
 if __name__ == '__main__':
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     # Start background event generator
-    event_thread = threading.Thread(target=event_generator, daemon=True)
+    event_thread = threading.Thread(target=event_generator, daemon=False, name="EventGenerator")
     event_thread.start()
     
     print("🚀 Advanced RL Dashboard Starting...")
     print("📊 Dashboard URL: http://localhost:8080")
     print("🔴 Live events will start generating automatically")
+    print("🛑 Press Ctrl+C to stop gracefully")
     
-    app.run(debug=True, host='0.0.0.0', port=8080, use_reloader=False)
+    try:
+        app.run(debug=True, host='0.0.0.0', port=8080, use_reloader=False)
+    except KeyboardInterrupt:
+        signal_handler(signal.SIGINT, None)
+    except Exception as e:
+        print(f"❌ Error starting dashboard: {e}")
+        shutdown_event.set()
+        if event_thread and event_thread.is_alive():
+            event_thread.join(timeout=2.0)

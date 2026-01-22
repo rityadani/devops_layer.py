@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, Any, Optional, List
 
@@ -105,7 +105,7 @@ def process_runtime_event(runtime_payload: Dict[str, Any]) -> Dict[str, Any]:
         "reasoning": reasoning,
         "safe_for_execution": True,
         "was_downgraded": was_downgraded,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 def main():
