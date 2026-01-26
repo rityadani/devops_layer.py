@@ -133,10 +133,19 @@ def demonstrate_end_to_end_flow():
     print("[OK] RL reacts only to validated contract-compliant states")
     print("[OK] RL never breaks safety envelope - all actions are safe")
     print("[OK] RL decisions are fully explainable with reasoning")
+    print("[OK] RL learns from real outcomes using Q-Learning")
     print("[OK] System handles failures gracefully without crashes")
     print("[OK] Environment-specific safety rules enforced")
     print("[OK] Invalid data rejected with safe NOOP fallbacks")
     print("[OK] All interactions logged for debugging and audit")
+    
+    # Show RL learning summary
+    rl_summary = bridge.get_rl_model_summary()
+    print("\n=== RL LEARNING SUMMARY ===")
+    print(f"States Learned: {rl_summary['total_states']}")
+    print(f"Total Experiences: {rl_summary['total_experiences']}")
+    print(f"Learning Rate: {rl_summary['parameters']['learning_rate']}")
+    print(f"Exploration Rate: {rl_summary['parameters']['exploration_rate']}")
     
     print("\n*** SYSTEM IS PRODUCTION-READY FOR LIVE ORCHESTRATOR WIRING ***")
 

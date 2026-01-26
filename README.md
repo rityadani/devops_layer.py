@@ -58,13 +58,32 @@
 Runtime Events → Contract Validator → State Adapter → RL Decision → Safety Guard → Orchestrator
 ```
 
-### Flow Steps
-
-1. **Contract Validation**: Validate incoming runtime state against strict schema
-2. **State Conversion**: Convert runtime format to RL decision format
-3. **RL Decision**: Generate action based on current state
+### RL Decision**: Generate action based on current state using Q-Learning
 4. **Safety Guard**: Apply environment-specific safety rules
 5. **Decision Output**: Return validated, safe action intent
+
+### RL Learning Integration
+
+The system now includes a full Q-Learning RL agent (`rl_agent.py`) that:
+
+- **Learns from real runtime outcomes** - Actions and their consequences update the Q-table
+- **Balances exploration vs exploitation** - Epsilon-greedy policy for safe learning
+- **Adapts to environment patterns** - Learns optimal actions for different health states
+- **Persists learning** - Model saved to `rl_model.json` for continuity
+
+#### Reward Function
+
+```python
+reward_weights = {
+    "latency_improvement": 10,    # Reduced latency
+    "error_reduction": 15,        # Fewer errors after action
+    "successful_action": 5,       # Appropriate action for health state
+    "failed_action": -20,         # Inappropriate action
+    "unsafe_action": -50,         # Action blocked by safety rules
+    "no_change_needed": 2,        # Correct NOOP when healthy
+    "time_penalty": -1            # Penalty for unnecessary actions
+}
+```
 
 ### Safety Rules by Environment
 
@@ -113,6 +132,7 @@ By end of sprint:
 - ✅ **RL reacts only to validated states** - Strict contract validation enforced
 - ✅ **RL never breaks safety envelope** - Environment-specific safety rules applied
 - ✅ **RL decisions are explainable** - Full reasoning provided for every action
+- ✅ **RL learns from actual outcomes** - Q-Learning agent adapts to real system behavior
 - ✅ **System feels production-responsible** - Comprehensive error handling and logging
 
 ## 🛡️ HARD CONSTRAINTS RESPECTED
@@ -143,6 +163,7 @@ The RL Decision Layer now:
 - `test_additional_failures.py` - Comprehensive failure case testing
 - `proof_real_runtime.py` - Real runtime event processing proof
 - `final_demo.py` - End-to-end production flow demonstration
+- `real_orchestrator_integration.py` - **NEW** Live orchestrator wiring simulation with RL learning
 
 ## Usage Example
 

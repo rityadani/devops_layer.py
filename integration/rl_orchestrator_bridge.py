@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List
 from enum import Enum
 from integration.runtime_contract_validator import RuntimeContractValidator, ValidationResult
 from integration.runtime_state_adapter import RuntimeStateAdapter
+from integration.rl_agent import QLearningAgent
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class RLOrchestratorBridge:
     def __init__(self):
         self.contract_validator = RuntimeContractValidator()
         self.state_adapter = RuntimeStateAdapter()
+        self.rl_agent = QLearningAgent()
         self.blocked_actions = []
         self.safe_downgrades = []
         
@@ -79,11 +81,26 @@ class RLOrchestratorBridge:
             return self.contract_validator.get_noop_response(error_msg)
     
     def _get_rl_decision(self, rl_state: Dict[str, Any]) -> ActionType:
-        """Simplified RL decision logic (replace with actual RL model)"""
+        """Get decision from Q-Learning RL agent"""
+        try:
+            # Get action from RL agent
+            action_str = self.rl_agent.choose_action(rl_state)
+            action = ActionType(action_str)
+            
+            logger.info(f"RL Agent chose action: {action.value} for state: {rl_state}")
+            return action
+            
+        except Exception as e:
+            logger.warning(f"RL decision failed, falling back to rule-based: {e}")
+            # Fallback to simple rule-based logic
+            return self._rule_based_fallback(rl_state)
+    
+    def _rule_based_fallback(self, rl_state: Dict[str, Any]) -> ActionType:
+        """Rule-based fallback when RL agent fails"""
         health_band = rl_state.get("health_band", "healthy")
         recent_failures = rl_state.get("recent_failures", 0)
         
-        # Simple rule-based decisions for integration
+        # Simple rule-based decisions
         if health_band == "failing" or recent_failures > 10:
             return ActionType.RESTART
         elif health_band == "degraded" or recent_failures > 3:
@@ -159,6 +176,27 @@ class RLOrchestratorBridge:
     def get_blocked_actions_log(self) -> List[Dict[str, Any]]:
         """Return log of blocked actions for debugging"""
         return self.blocked_actions.copy()
+    
+    def provide_feedback(self, previous_state: Dict[str, Any], action_taken: str,
+                        outcome_state: Dict[str, Any], success: bool = True):
+        """
+        Provide feedback to RL agent for learning
+        Call this after action execution to enable learning from real outcomes
+        """
+        try:
+            reward = self.rl_agent.calculate_reward(previous_state, action_taken, outcome_state)
+            if not success:
+                reward += self.rl_agent.reward_weights["failed_action"]
+            
+            self.rl_agent.learn_from_experience(previous_state, action_taken, reward, outcome_state)
+            logger.info(f"RL feedback provided: action={action_taken}, reward={reward:.2f}, success={success}")
+            
+        except Exception as e:
+            logger.error(f"Failed to provide RL feedback: {e}")
+    
+    def get_rl_model_summary(self) -> Dict[str, Any]:
+        """Get summary of RL learning progress"""
+        return self.rl_agent.get_model_summary()
     
     def get_safe_downgrades_log(self) -> List[Dict[str, Any]]:
         """Return log of safety downgrades for debugging"""
